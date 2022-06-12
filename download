@@ -5,6 +5,7 @@ from typing import List
 from urllib import response
 import os
 import time
+from datetime import date
 
 
 from google.auth.transport.requests import Request
@@ -71,30 +72,75 @@ def get_message_detail(message_id, msg_format='metadata', metadata_headers: List
 
     return message_detail
 
+def get_header_subject(headers):
+    for h in headers:
+        if h["name"] == "Subject":
+            return h["value"]
+    return ""
 
+def get_info_from_headers(headers):
+    msg_from = ""
+    subject = ""
+    date = ""
+    for h in headers:
+        if h["name"] == "From":
+            msg_from = h["value"]
+
+        if h["name"] == "Date":
+            date = h["value"]
+
+        if h["name"] == "Subject":
+            subject = h["value"].replace(" ", "")
+
+    return [msg_from, date, subject]
 
 if __name__ == '__main__':
     
     SCOPES = ['https://mail.google.com/']
+
+    today = date.today()
+    
+    print("Today's date:", today)
     
     creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     service = build('gmail', 'v1', credentials=creds)
 
-    query_string = 'has:attachment'
+    # after:2022/5/12 before:2022/7/13
+
+    #query_date = "before: {0} after: {1}".format(today.strftime('%Y/%m/%d'), date.today().replace(day=1).strftime('%Y/%m/%d'))
+    query_date = "after: {0}".format(date.today().replace(day=1).strftime('%Y/%m/%d'))
+    #print(query_date)
+
+    query_string = 'has:attachment & 信用卡 & 帳單' + " & " + query_date
+    
 
     email_messages = search_emails(query_string)
 
+    print("found ", len(email_messages), " messages.")
+
     save_location = os.getcwd()
 
-    print(email_messages)
+    #print(email_messages)
 
     for email_message in email_messages:
         messageDetail = get_message_detail(email_message['id'], msg_format='full', metadata_headers=['parts'])
         messageDetailPayload = messageDetail.get('payload')
+        headers = messageDetail['payload']['headers']
+        
+        #for header in headers:
+        #    print(header)
 
+        info = get_info_from_headers(headers)
+        print(info[0])
+        print(info[1])
+        print(info[2])
+
+
+        print("attachments: ")
         if 'parts' in messageDetailPayload:
             for msgPayload in messageDetailPayload['parts']:
                 file_name = msgPayload['filename']
+                print(file_name)
                 body = msgPayload['body']
                 if 'attachmentId' in body:
                     attachment_id = body['attachmentId']
@@ -104,6 +150,7 @@ if __name__ == '__main__':
                         _f.write(attachment_content)
                         print(f'File {file_name} is saved at {save_location}')
 
+        print(" ")
         time.sleep(0.5)
 
 
